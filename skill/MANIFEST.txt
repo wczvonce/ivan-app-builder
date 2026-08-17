@@ -1,0 +1,23 @@
+ivan-app-builder-v1.3.2/
+├── SKILL.md
+├── README-SK.md
+├── PROMPT-PRE-CLAUDE-CODE.md
+├── CHANGELOG.md
+├── MANIFEST.txt
+├── CHECKSUMS.sha256
+├── config/
+│   └── app-builder.example.json5
+├── references/
+│   ├── claude-worker-prompt.md
+│   ├── discovery-interview.md
+│   ├── discovery-smoke-test.md
+│   ├── project-contract.md
+│   ├── review-rubric.md
+│   ├── setup-and-recovery.md
+│   └── telegram-report.md
+└── templates/
+    ├── APP_SPEC.template.md
+    └── TASKS.template.md
+
+Note: an installed copy additionally contains .openclaw/source-origin.json
+(OpenClaw installer metadata, not part of the package itself).

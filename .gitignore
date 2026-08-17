@@ -1,0 +1,13 @@
+node_modules/
+
+# Behový stav a logy watchdogu — patria k inštancii, nie do repozitára
+app-builder-watchdog-state.json
+*.log
+
+# Lokálne kópie konfigurácie s tokenmi
+openclaw.json
+*.backup-*
+.env
+
+Thumbs.db
+.DS_Store

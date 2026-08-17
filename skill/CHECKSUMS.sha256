@@ -1,0 +1,15 @@
+073503951de2a1226dc2f8b5c7bf65cbbc7b9942632db57921e2fdfdaf8c311d  ./config/app-builder.example.json5
+bfb3a3debdba63b2696fa4d7eb526e104c9b091d6cb6394b18f556711ead7904  ./CHANGELOG.md
+e3ee7d509149d596043e175851729acb0f4eda6e84f0253f43d481ffb0a01458  ./MANIFEST.txt
+8ca34b38a2d4d242ec097cd9da18900296ca540d1abc9f08c526416a170e3ff6  ./PROMPT-PRE-CLAUDE-CODE.md
+ad4699b8d9cffc51f42973514194fcb0c958e884273f3b54d177e4ffa508a843  ./README-SK.md
+5c6d44293552aed786263a33bdd256b9a4714ba4c3982242d5262583d0b9de06  ./references/claude-worker-prompt.md
+af137ea4fbb17c1f8295ebc5b128cfdc207280fad1f21ec66d669780290f1203  ./references/discovery-interview.md
+a2f7e64089709792fea2733b143ce81dd3c41398f4caac1166922659e0606724  ./references/discovery-smoke-test.md
+905e91c1e545372945f386a1c4bce6173b2770ff7816d0c8452e41c6f6e7eb2c  ./references/project-contract.md
+85102774928c61bfbb82e9b15ce948a75ce7af82aebbf52e5ee1e9dc6c2f2a1e  ./references/review-rubric.md
+7f61dddda420070334c55a68558f69d58c6b8ac14f5858a7ed4d82ec195835d6  ./references/setup-and-recovery.md
+06c3f76a11b347584440e25c50adc64325b17fcd593ac498e8dc81f6fa120eb4  ./references/telegram-report.md
+ba99ab617e0ff4e4a7db30257e32dacaf74052fd3c7349e7fc36a0c0e7e59d7d  ./SKILL.md
+e64f12bf5edd04cdf7e2d2d3d196e9775f77bd42e35a4ada0c7f8859e9f5add1  ./templates/APP_SPEC.template.md
+d2dbe41103721832b2a7c14ea3df7f235bb8656c91dfc29066425bf640994731  ./templates/TASKS.template.md

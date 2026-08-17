@@ -1,0 +1,62 @@
+// Merge this fragment into the live OpenClaw configuration.
+// Do not replace existing agents, plugins, auth profiles, or Telegram bindings.
+// Replace paths/model only after checking `openclaw config schema` and
+// `openclaw models list --provider openai` on the target Gateway.
+{
+  agents: {
+    ownership: "explicit",
+    entries: {
+      "app-builder": {
+        workspace: "~/.openclaw/workspace-app-builder",
+
+        // Subscription-backed native Codex parent/orchestrator.
+        model: "openai/gpt-5.6-sol",
+        models: {
+          "openai/gpt-5.6-sol": {
+            // Fail closed instead of silently using a different runtime.
+            agentRuntime: { id: "codex" },
+          },
+        },
+
+        // A sandboxed requester cannot launch host-side ACP sessions.
+        // Run this dedicated agent under a restricted OS user/VM instead.
+        sandbox: { mode: "off" },
+
+        // Keep only the orchestrator skill visible to this dedicated agent.
+        skills: ["ivan-app-builder"],
+
+        tools: {
+          profile: "coding",
+          // Recommended guarded policy for the OpenClaw parent. This does not
+          // change ACPX permissions used by the Claude Code child.
+          exec: { mode: "auto" },
+        },
+      },
+    },
+  },
+
+  acp: {
+    // This orchestrator only needs Claude Code as an external harness.
+    allowedAgents: ["claude"],
+  },
+
+  plugins: {
+    entries: {
+      codex: {
+        enabled: true,
+      },
+      acpx: {
+        enabled: true,
+        config: {
+          probeAgent: "claude",
+
+          // Safe installation default. It permits planning/inspection but
+          // write/exec-heavy Claude runs will fail until the operator chooses
+          // an isolated environment and explicitly changes this to approve-all.
+          permissionMode: "approve-reads",
+          nonInteractivePermissions: "fail",
+        },
+      },
+    },
+  },
+}
