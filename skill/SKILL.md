@@ -1,7 +1,7 @@
 ---
 name: ivan-app-builder
 description: "Interview the user and confirm a product specification before coding, then orchestrate Codex planning/review and Claude Code implementation through ACP with tests and bounded repair loops."
-version: "1.6.0"
+version: "1.6.1"
 user-invocable: true
 disable-model-invocation: false
 metadata:
@@ -459,7 +459,8 @@ The gate applies before DONE in every verification mode, including FAST.
    source against the spec and acceptance criteria. It uses subscription-authenticated
    read-only CLI sessions. A model-written PASS, command description or empty Git diff
    is never an approval receipt.
-4. Default route: fresh `codex exec review` through ChatGPT. A known GPT orchestrator
+4. Default route: fresh isolated `codex exec` review session through ChatGPT, pinned to `gpt-6-astra` with
+   high reasoning. A known GPT orchestrator
    fallback skips nested Codex and starts pinned Fable. An actual nested-Codex decline
    goes directly to Fable without retry; HTTP 401 gets one retry after 30 seconds.
 5. Fable runs in a fresh acpx Claude session pinned to `claude-fable-5`, with

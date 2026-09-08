@@ -1,4 +1,4 @@
-## Povinný host review runner (1.6.0)
+## Povinný host review runner (1.6.1)
 
 Po implementácii a po každej oprave požiadaj host o Phase 7:
 `node "$HOME/.openclaw/scripts/app-builder-review.js" request --project <worktree> --slice S1 --backend <skutočný model>`.
@@ -19,8 +19,9 @@ Tento príkaz zapisuje DONE a uzatvára Factory stav. Záverečný report do out
 `kind: "completion"`; watchdog ho zadrží, kým completion neplatí pre aktuálny kód.
 Report vždy uvedie skutočného reviewera a slabší same-family fallback výslovne prizná.
 
-GPT fallback orchestrátora je naďalej schválený bez ďalšej otázky. Zapíš skutočný runtime
-model do hlavičky run-state. Host pri GPT začne Fable; inak Codex → Fable → posledný
+GPT fallback orchestrátora je naďalej schválený bez ďalšej otázky. Predvolený reťazec je
+Claude Opus → GPT-6 Astra → GPT-5.6 Sol → ďalšie nakonfigurované zálohy. Zapíš skutočný runtime
+model do hlavičky run-state. Host pri ľubovoľnom GPT začne Fable; inak GPT-6 Astra cez Codex → Fable → posledný
 same-family fallback. HOLD nie je výpadok providera. Žiadna review znamená REVIEW-pending,
 nikdy DONE. FAST tiež musí pred DONE prejsť host gate. WAITING_USER, PAUSE, schválenia pre
 nasadenie a zmrazené zadanie zostávajú záväzné. Pri provider limite používaj outbox a

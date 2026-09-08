@@ -7,6 +7,9 @@ a práve vtedy je watchdog potrebný najviac.
 ## Predpoklady
 
 - Node.js 24 so vstavaným SQLite (testované prostredie host runnera).
+- Na Windows: WSL2 distribúcia `Ubuntu-24.04` a aktuálny Codex CLI v
+  `/home/forge/.local/bin/codex`, prihlásený cez ChatGPT. Host reviewer tam používa
+  vynútený read-only sandbox.
 - OpenClaw s nakonfigurovaným Telegram kanálom v `~/.openclaw/openclaw.json`.
 - Spoločne skopírované `scripts/app-builder-watchdog.js` a `scripts/app-builder-review.js` do `~/.openclaw/scripts/`.
 - Pre Phase 7 prihlásený Codex cez ChatGPT a Claude Code cez predplatné, plus nainštalovaný acpx.

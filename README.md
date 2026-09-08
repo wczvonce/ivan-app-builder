@@ -9,7 +9,7 @@ Telegram
   → OpenClaw orchestrátor (otázky, potvrdená špecifikácia, plán)
   → Claude Code cez oficiálny ACPX (programovanie)
   → testy / build / smoke test (web aj mobil, so screenshotmi)
-  → host runner: Codex review; pri GPT backende povinne Fable
+  → host runner: GPT-6 Astra Codex review; pri GPT backende povinne Fable
   → opravné kolá s limitom (3 na úlohu, 8 na celý beh)
   → výsledok do Telegramu
 ```
@@ -22,7 +22,7 @@ mimo rozsahu a počká na výslovné schválenie.
 
 | Cesta | Obsah |
 |---|---|
-| `skill/` | samotný skill v1.6.0 — `SKILL.md`, referencie, šablóny, konfiguračný fragment |
+| `skill/` | samotný skill v1.6.1 — `SKILL.md`, referencie, šablóny, konfiguračný fragment |
 | `scripts/app-builder-watchdog.js` | watchdog nezávislý od agentov aj od gateway |
 | `scripts/app-builder-watchdog.test.js` | regresné testy a integrácia s host review (nič neposielajú) |
 | `scripts/app-builder-review.js` | vykonanie testov, nezávislej review a brány DONE |

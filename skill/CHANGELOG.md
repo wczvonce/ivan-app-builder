@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6.1 — 2026-09-08
+
+- The host Codex reviewer is pinned to GPT-6 Astra with high reasoning. The older desktop-bundled
+  CLI cannot run Astra, so Codex 0.153.4 is installed through npm on Windows and in WSL. The
+  runner uses an isolated `codex exec` session with the review contract and JSON
+  schema. On Windows it runs in the Ubuntu 24.04 WSL2 read-only sandbox, avoiding the native
+  Windows restricted-token failure while retaining enforced read-only access. Login remains
+  ChatGPT subscription-backed; no API billing is enabled.
+- The app-builder's first approved GPT orchestrator fallback is now Astra. GPT-5.6 Sol stays
+  behind it as the next fallback. Claude Opus remains primary and Claude Code remains the
+  implementer, so the normal cross-vendor Astra review stays independent.
+- When Astra is the active orchestrator fallback, Phase 7 starts Fable instead of asking
+  Astra/Codex to review its own orchestration.
+
 ## 1.6.0 — 2026-09-08
 
 - Added a host-owned Phase 7 runner: fresh deterministic checks, isolated source snapshots,

@@ -1,4 +1,4 @@
-# Phase 7: host review runner (1.6.0)
+# Phase 7: host review runner (1.6.1)
 
 The Windows watchdog runs `app-builder-review.js` outside the orchestrator's model harness.
 It executes tests and a fresh read-only reviewer. Writing `PASS` or `DONE` in a project file
@@ -38,7 +38,11 @@ FAST can reduce the deterministic test contract, not eliminate independent revie
 
 ## Routing and limits
 
-- Default: subscription-authenticated `codex exec review`, read-only, fresh ephemeral session.
+- Default: subscription-authenticated isolated `codex exec` review session, pinned to `gpt-6-astra` with high
+  reasoning, read-only, fresh ephemeral session. Install a current Codex CLI that supports
+  Astra; on Windows the runner uses the current subscription-authenticated CLI inside the
+  `Ubuntu-24.04` WSL2 read-only sandbox. It records `reviewer_model` in its state and signed
+  approval receipt.
   It reviews the complete snapshot and the agreed spec, even when Git has no uncommitted diff.
 - Known GPT orchestrator fallback: skip nested Codex and start pinned Fable immediately.
   An actual nested-Codex decline also moves directly to Fable. No private-repository policy

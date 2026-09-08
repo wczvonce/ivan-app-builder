@@ -165,8 +165,9 @@ Known host facts the continuator works around: the agent's `cron` tool is stripp
 non-owner senders and `CronCreate` is disabled in the claude-cli harness; OpenClaw kills the
 CLI process tree at every turn end; a model fallback inside one turn restarts the turn with a
 fresh context (2026-09-02: the fallback saw its own `lock.json` as foreign); the agent's
-fallback list currently lets the orchestrator drop from claude-opus-4-8 to gpt-5.6-sol
-silently — a config decision for the owner (`agents.list[app-builder].model.fallbacks`).
+fallback list currently lets the orchestrator drop from claude-opus-4-8 to gpt-6-astra,
+then gpt-5.6-sol
+silently — a config decision for the owner (`agents.entries.app-builder.model.fallbacks`).
 
 This is why the `Status:` line and the companion files in run-state matter: the continuator
 cannot tell a dead run from a working one without them.

@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
-const { createService, sourceSnapshot, validateReview, parseCodexReview, routePlan, acpxMessage, errorClass, processRun, validateChecks, testEvidencePassed, cleanEnv } = require("./app-builder-review");
+const { createService, sourceSnapshot, validateReview, parseCodexReview, routePlan, acpxMessage, errorClass, processRun, validateChecks, testEvidencePassed, toWslPath, codexReviewArgs, CODEX_REVIEW_MODEL, CODEX_REVIEW_REASONING, cleanEnv } = require("./app-builder-review");
 const PASS = { verdict: "APPROVE", acceptance: "PASS", summary: "All acceptance criteria verified.", findings: [] };
 const HOLD = { verdict: "HOLD", acceptance: "FAIL", summary: "Wrong result.", findings: [{ severity: "IMPORTANT", location: "app.js:1", evidence: "add(1, 1) returns 3", correction: "Return a + b" }] };
 const success = (review = PASS) => ({ outcome: "reviewed", exit_code: 0, duration_ms: 100, review });
@@ -197,4 +197,13 @@ test("only visible ACP messages enter result parser; contradictory approval is r
 test("process timeout stops its owned child and returns finite evidence", async () => {
   const result = await processRun(process.execPath, ["-e", "setInterval(()=>{},1000)"], { timeout: 150 });
   assert.equal(result.timed_out, true); assert.equal(result.exit_code, null); assert.ok(result.duration_ms < 10000);
+});
+test("Codex review is pinned to Astra with high reasoning and read-only isolation", () => {
+  const args = codexReviewArgs("schema.json", "result.json");
+  assert.equal(CODEX_REVIEW_MODEL, "gpt-6-astra");
+  assert.equal(CODEX_REVIEW_REASONING, "high");
+  assert.deepEqual(args.slice(0, 8), ["-a", "never", "-s", "read-only", "-m", "gpt-6-astra", "-c", 'model_reasoning_effort="high"']);
+  assert.equal(args[10], "exec"); assert.equal(args.includes("review"), false);
+  assert.ok(args.includes("--ignore-user-config")); assert.ok(args.includes("--ignore-rules")); assert.ok(args.includes("--ephemeral"));
+  if (process.platform === "win32") assert.equal(toWslPath("C:\\review snapshot\\schema.json"), "/mnt/c/review snapshot/schema.json");
 });
