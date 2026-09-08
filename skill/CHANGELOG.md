@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.3 — 2026-09-08
+
+- A Claude/ACPX session-limit banner is now treated as provider unavailability even when the
+  wrapper exits with code zero. The host gate stays pending and schedules its retry shortly
+  after the reported reset instead of recording an invalid review or exhausting hourly retries.
+
 ## 1.6.2 — 2026-09-08
 
 - Fable discovery now supports the current ACPX package layout (`node_modules/acpx`) as well

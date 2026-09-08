@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
-const { createService, sourceSnapshot, validateReview, parseCodexReview, routePlan, acpxMessage, errorClass, processRun, validateChecks, testEvidencePassed, resolveAcpx, toWslPath, codexReviewArgs, CODEX_REVIEW_MODEL, CODEX_REVIEW_REASONING, cleanEnv } = require("./app-builder-review");
+const { createService, sourceSnapshot, validateReview, parseCodexReview, routePlan, acpxMessage, errorClass, providerFailure, providerRetryAt, processRun, validateChecks, testEvidencePassed, resolveAcpx, toWslPath, codexReviewArgs, CODEX_REVIEW_MODEL, CODEX_REVIEW_REASONING, cleanEnv } = require("./app-builder-review");
 const PASS = { verdict: "APPROVE", acceptance: "PASS", summary: "All acceptance criteria verified.", findings: [] };
 const HOLD = { verdict: "HOLD", acceptance: "FAIL", summary: "Wrong result.", findings: [{ severity: "IMPORTANT", location: "app.js:1", evidence: "add(1, 1) returns 3", correction: "Return a + b" }] };
 const success = (review = PASS) => ({ outcome: "reviewed", exit_code: 0, duration_ms: 100, review });
@@ -213,4 +213,11 @@ test("Fable resolver supports the current top-level acpx package layout", (t) =>
   const cli = path.join(root, "openclaw-acpx-current", "node_modules", "acpx", "dist", "cli.js");
   fs.mkdirSync(path.dirname(cli), { recursive: true }); fs.writeFileSync(cli, "// fixture\n");
   assert.equal(resolveAcpx(root), cli);
+});
+test("a provider limit reported with exit code zero remains unavailable and schedules its reset", () => {
+  const now = new Date(2026, 8, 8, 17, 30, 0, 0).getTime();
+  const result = { exit_code: 0, timed_out: false, stderr: "", stdout: "You've hit your session limit · resets 10pm (Europe/Bratislava)" };
+  assert.equal(providerFailure(result), "subscription-limit");
+  assert.equal(providerRetryAt(result, now), new Date(2026, 8, 8, 22, 5, 0, 0).getTime());
+  assert.equal(providerFailure({ ...result, stdout: '{"summary":"handles rate limits"}' }), null);
 });

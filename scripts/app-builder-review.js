@@ -156,6 +156,23 @@ function errorClass(result) {
   if (/ENOENT|not recognized|not found/i.test(text)) return "cli-unavailable";
   return "provider-error";
 }
+function providerFailure(result) {
+  if (result.timed_out || result.exit_code !== 0) return errorClass(result);
+  const text = `${result.stderr || ""}\n${result.stdout || ""}`;
+  if (/you(?:'|’)ve hit your session limit|session limit (?:reached|exceeded)|usage limit (?:reached|exceeded)/i.test(text)) return "subscription-limit";
+  return null;
+}
+function providerRetryAt(result, now = Date.now()) {
+  if (providerFailure(result) !== "subscription-limit") return null;
+  const text = `${result.stderr || ""}\n${result.stdout || ""}`;
+  const match = text.match(/resets?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (!match) return null;
+  let hour = Number(match[1]) % 12;
+  if (match[3].toLowerCase() === "pm") hour += 12;
+  const retry = new Date(now); retry.setHours(hour, Number(match[2] || 0), 0, 0);
+  if (retry.getTime() <= now) retry.setDate(retry.getDate() + 1);
+  return retry.getTime() + 5 * 60_000;
+}
 function pidAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid < 1) return false;
   try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; }
@@ -499,7 +516,8 @@ function createService(options = {}) {
     }
     const reviewer_model = route === "codex" ? CODEX_REVIEW_MODEL : route === "fable" ? "claude-fable-5" : "claude-subscription-default";
     const evidence = { route, reviewer_model, exit_code: result.exit_code, duration_ms: result.duration_ms, timed_out: result.timed_out };
-    if (result.exit_code !== 0 || result.timed_out) return { ...evidence, error: errorClass(result), outcome: "unavailable" };
+    const failure = providerFailure(result);
+    if (failure) return { ...evidence, error: failure, retry_at: providerRetryAt(result, time()), outcome: "unavailable" };
     try { return { ...evidence, outcome: "reviewed", review: route === "codex" ? parseCodexReview(text) : parseReview(text) }; }
     catch (e) { return { ...evidence, outcome: "invalid", error: e.message, output_hash: hash(text), output_bytes: Buffer.byteLength(text), visible_result: redact(text).slice(0, 8000) }; }
   }
@@ -592,7 +610,11 @@ function createService(options = {}) {
           if (route === "fable" && deepCodexPassed) break;
           if (time() - state.started_at > RUN_TIMEOUT - ROUTE_TIMEOUT) break;
         }
-        if (!review) { state.status = "needs_attention"; state.reason = "Povinná nezávislá review nedobehla s platným výsledkom; REVIEW-pending."; state.retry_after = time() + 60 * 60000; }
+        if (!review) {
+          state.status = "needs_attention"; state.reason = "Povinná nezávislá review nedobehla s platným výsledkom; REVIEW-pending.";
+          const providerResets = state.attempts.map((attempt) => attempt.retry_at).filter((value) => Number.isFinite(value) && value > time());
+          state.retry_after = providerResets.length ? Math.min(...providerResets) : time() + 60 * 60000;
+        }
         else {
           if (sourceSnapshot(project).source_hash !== state.source_hash) throw new Error("Source changed during review; approval is stale");
           state.route = chosen; state.reviewer_model = chosenModel; state.status = review.verdict === "APPROVE" ? "approved" : "changes_requested";
@@ -659,7 +681,7 @@ function createService(options = {}) {
   return { request, run, inspect, complete, configure, launch, load, location, setRunState, recordLegacy, legacyReviewed, runnerBusy, registeredProjects, fail };
 }
 function jsonFrom(text) { try { return JSON.parse(text); } catch { return null; } }
-module.exports = { createService, sourceSnapshot, parseReview, parseCodexReview, validateReview, validateChecks, routePlan, cleanEnv, processRun, testEvidencePassed, acpxMessage, errorClass, resolveAcpx, resolveCodex, resolveCodexRuntime, toWslPath, codexReviewArgs, CODEX_REVIEW_MODEL, CODEX_REVIEW_REASONING, RESULT_SCHEMA };
+module.exports = { createService, sourceSnapshot, parseReview, parseCodexReview, validateReview, validateChecks, routePlan, cleanEnv, processRun, testEvidencePassed, acpxMessage, errorClass, providerFailure, providerRetryAt, resolveAcpx, resolveCodex, resolveCodexRuntime, toWslPath, codexReviewArgs, CODEX_REVIEW_MODEL, CODEX_REVIEW_REASONING, RESULT_SCHEMA };
 if (require.main === module) {
   (async () => {
     const args = process.argv.slice(2), command = args[0];

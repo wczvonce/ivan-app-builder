@@ -22,7 +22,7 @@ mimo rozsahu a počká na výslovné schválenie.
 
 | Cesta | Obsah |
 |---|---|
-| `skill/` | samotný skill v1.6.2 — `SKILL.md`, referencie, šablóny, konfiguračný fragment |
+| `skill/` | samotný skill v1.6.3 — `SKILL.md`, referencie, šablóny, konfiguračný fragment |
 | `scripts/app-builder-watchdog.js` | watchdog nezávislý od agentov aj od gateway |
 | `scripts/app-builder-watchdog.test.js` | regresné testy a integrácia s host review (nič neposielajú) |
 | `scripts/app-builder-review.js` | vykonanie testov, nezávislej review a brány DONE |

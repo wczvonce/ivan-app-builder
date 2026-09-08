@@ -1,4 +1,4 @@
-ivan-app-builder-v1.6.2/
+ivan-app-builder-v1.6.3/
 ├── SKILL.md
 ├── README-SK.md
 ├── PROMPT-PRE-CLAUDE-CODE.md
