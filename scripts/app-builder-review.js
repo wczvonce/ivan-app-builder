@@ -258,12 +258,13 @@ function routePlan(backend, mode, implementer) {
   if (implementer === "codex") return ["fable", "same-family"];
   return /^(?:(?:openai(?:-codex)?|codex)\/)?gpt-/i.test(backend || "") ? ["fable", "same-family"] : ["codex", "fable", "same-family"];
 }
-function resolveAcpx() {
-  const projects = path.join(os.homedir(), ".openclaw", "npm", "projects");
+function resolveAcpx(projects = path.join(os.homedir(), ".openclaw", "npm", "projects")) {
   const found = fs.existsSync(projects) ? fs.readdirSync(projects).filter((n) => n.startsWith("openclaw-acpx-")).sort().reverse() : [];
   for (const n of found) {
-    const cli = path.join(projects, n, "node_modules", "@openclaw", "acpx", "node_modules", "acpx", "dist", "cli.js");
-    if (fs.existsSync(cli)) return cli;
+    for (const cli of [
+      path.join(projects, n, "node_modules", "acpx", "dist", "cli.js"),
+      path.join(projects, n, "node_modules", "@openclaw", "acpx", "node_modules", "acpx", "dist", "cli.js"),
+    ]) if (fs.existsSync(cli)) return cli;
   }
   throw new Error("Pinned Fable acpx route is not installed");
 }
@@ -658,7 +659,7 @@ function createService(options = {}) {
   return { request, run, inspect, complete, configure, launch, load, location, setRunState, recordLegacy, legacyReviewed, runnerBusy, registeredProjects, fail };
 }
 function jsonFrom(text) { try { return JSON.parse(text); } catch { return null; } }
-module.exports = { createService, sourceSnapshot, parseReview, parseCodexReview, validateReview, validateChecks, routePlan, cleanEnv, processRun, testEvidencePassed, acpxMessage, errorClass, resolveCodex, resolveCodexRuntime, toWslPath, codexReviewArgs, CODEX_REVIEW_MODEL, CODEX_REVIEW_REASONING, RESULT_SCHEMA };
+module.exports = { createService, sourceSnapshot, parseReview, parseCodexReview, validateReview, validateChecks, routePlan, cleanEnv, processRun, testEvidencePassed, acpxMessage, errorClass, resolveAcpx, resolveCodex, resolveCodexRuntime, toWslPath, codexReviewArgs, CODEX_REVIEW_MODEL, CODEX_REVIEW_REASONING, RESULT_SCHEMA };
 if (require.main === module) {
   (async () => {
     const args = process.argv.slice(2), command = args[0];

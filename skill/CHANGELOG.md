@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.2 — 2026-09-08
+
+- Fable discovery now supports the current ACPX package layout (`node_modules/acpx`) as well
+  as the older nested layout, so the documented pinned read-only fallback actually starts.
+
 ## 1.6.1 — 2026-09-08
 
 - The host Codex reviewer is pinned to GPT-6 Astra with high reasoning. The older desktop-bundled
@@ -13,7 +18,6 @@
   implementer, so the normal cross-vendor Astra review stays independent.
 - When Astra is the active orchestrator fallback, Phase 7 starts Fable instead of asking
   Astra/Codex to review its own orchestration.
-
 ## 1.6.0 — 2026-09-08
 
 - Added a host-owned Phase 7 runner: fresh deterministic checks, isolated source snapshots,
