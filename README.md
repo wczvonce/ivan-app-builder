@@ -6,10 +6,10 @@ keď žiadny model nedokáže odpovedať.
 
 ```text
 Telegram
-  → OpenClaw + Codex (otázky, potvrdená špecifikácia, plán, kontrola)
+  → OpenClaw orchestrátor (otázky, potvrdená špecifikácia, plán)
   → Claude Code cez oficiálny ACPX (programovanie)
   → testy / build / smoke test (web aj mobil, so screenshotmi)
-  → nezávislý Codex review
+  → host runner: Codex review; pri GPT backende povinne Fable
   → opravné kolá s limitom (3 na úlohu, 8 na celý beh)
   → výsledok do Telegramu
 ```
@@ -22,9 +22,12 @@ mimo rozsahu a počká na výslovné schválenie.
 
 | Cesta | Obsah |
 |---|---|
-| `skill/` | samotný skill v1.3.2 — `SKILL.md`, referencie, šablóny, konfiguračný fragment |
+| `skill/` | samotný skill v1.6.0 — `SKILL.md`, referencie, šablóny, konfiguračný fragment |
 | `scripts/app-builder-watchdog.js` | watchdog nezávislý od agentov aj od gateway |
-| `scripts/app-builder-watchdog.test.js` | testy detekcie (20 kontrol, nič neposielajú) |
+| `scripts/app-builder-watchdog.test.js` | regresné testy a integrácia s host review (nič neposielajú) |
+| `scripts/app-builder-review.js` | vykonanie testov, nezávislej review a brány DONE |
+| `scripts/app-builder-review.test.js` | testy review, fallbackov, opráv a platnosti schválenia |
+| `docs/review-runner.md` | workflow, inštalácia a obmedzenia host gate |
 | `docs/watchdog-setup.md` | inštalácia watchdogu na Windows a ladenie |
 
 ## Skill
@@ -41,10 +44,11 @@ Podrobnosti — režimy kontroly, overovanie mobilných aplikácií, limity opra
 potvrdzovacia brána — sú v [`skill/README-SK.md`](skill/README-SK.md) a v
 [`skill/SKILL.md`](skill/SKILL.md).
 
-Odporúča sa samostatný OpenClaw agent, ktorý má ako nadradený model natívny Codex a Claude Code
-používa cez oficiálny ACPX. Vzorový konfiguračný fragment je v
-[`skill/config/app-builder.example.json5`](skill/config/app-builder.example.json5) — je to podklad
-na zlúčenie, nie náhrada celej konfigurácie.
+Na tomto hoste je orchestrátor Claude s povoleným GPT fallbackom; implementuje samostatný
+Claude Code worker. Review spúšťa externý host runner podľa
+[`docs/review-runner.md`](docs/review-runner.md). Inštaluj runner aj watchdog spoločne.
+Konfiguračný fragment v `skill/config/` je starší príklad schémy; nenahrádzaj ním živý config.
+Modely a runtime over podľa skutočne nainštalovanej verzie OpenClaw.
 
 ## Watchdog
 

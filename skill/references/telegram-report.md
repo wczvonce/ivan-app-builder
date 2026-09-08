@@ -2,6 +2,35 @@
 
 Always answer in the user's language and make questions easy to answer on a phone.
 
+## Delivery is not "sent" — verify it (hard rule)
+
+Every message that asks the user for a decision must be CONFIRMED DELIVERED before the run
+records that it is waiting for him. Read the send result:
+
+- Call the tool with the explicit shape
+  `message {action: "send", channel: "telegram", target: "<configured-telegram-chat-id>", message: "<text>"}`
+  (attachments via the tool's media field). Never pass `chatId`, never omit `channel`/`target`:
+  the app-builder session's own conversation is `webchat`/internal-ui, so a default-target
+  send goes nowhere the user can see. This is exactly how the 2026-09-02 mockups were lost.
+- *"Sent visible reply to the current source conversation via internal-ui"* = it went to an
+  internal conversation, **not to Telegram**. That is a failed delivery, not a sent message.
+- Real delivery identifies the channel/chat or returns a Telegram message id.
+- On failure (tool error such as "Unable to connect", missing tool, no message id): append the
+  full text as one line to `<project>/.app-builder/outbox.jsonl`
+  (`{"ts": "<ISO>", "text": "<message>"}`) and record `delivered_via: outbox`. The model-free
+  watchdog (`~/.openclaw/scripts/app-builder-watchdog.js`, every 5 min) sends unsent lines to
+  the user's Telegram and marks them `"sent": true` with the message id. Attachments cannot go
+  through the outbox — describe them and name the file paths instead. Relaying through the main
+  agent (`sessions_send` to `agent:main:telegram:direct:<configured-telegram-chat-id>`) is an optional extra only
+  when that tool is actually available in the current harness; it is never a substitute for the
+  outbox line.
+- Never set `Status:`/run-state to a waiting-for-user value on an unverified send, and record
+  how it was delivered (`telegram:<msg id>` / `outbox` / `relayed-by-main` / `FAILED`).
+
+Why this is a hard rule: on 2026-09-02 (nehnutelnosti-tracker) four dashboard mockups were
+"sent", every send landed in internal-ui, the user got nothing, and the run sat in
+`WAITING_USER` waiting for an answer to a message that never existed.
+
 ## First discovery response
 
 ```text

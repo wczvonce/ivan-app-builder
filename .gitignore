@@ -11,3 +11,10 @@ openclaw.json
 
 Thumbs.db
 .DS_Store
+
+# Host runtime/evidence belongs outside the source repository
+.app-builder/
+.solution-factory/
+receipt.key
+*.processing.jsonl
+*.tmp

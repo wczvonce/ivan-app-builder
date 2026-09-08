@@ -1,7 +1,7 @@
 ---
 name: ivan-app-builder
 description: "Interview the user and confirm a product specification before coding, then orchestrate Codex planning/review and Claude Code implementation through ACP with tests and bounded repair loops."
-version: "1.3.2"
+version: "1.6.0"
 user-invocable: true
 disable-model-invocation: false
 metadata:
@@ -13,7 +13,7 @@ metadata:
 
 Use this skill when the user wants to create a new application, add a substantial feature, fix a non-trivial bug, audit a codebase, or continue an existing app-development run from Telegram.
 
-The OpenClaw parent agent is the product lead, technical lead, and final reviewer. Prefer the native Codex runtime for this parent agent. Claude Code is the primary implementer and runs through the official OpenClaw ACP/acpx route. Do not turn the Telegram conversation over to Claude Code; keep OpenClaw in control and delegate bounded implementation turns.
+The OpenClaw parent agent is the product lead and technical lead. The host runner enforces the final review gate; the parent is never the independent reviewer of work it orchestrated (Phase 7). On this host the parent runs on Claude (since 2026-08-27) and delegates bounded implementation turns to a fresh worker session; the ACP write route is currently broken here, so the worker is a native subagent (see the Phase 5 "Host reality" note). Independent review comes from the host-managed cross-vendor Codex route and the ordered Phase 7 fallbacks. Do not turn the Telegram conversation over to the worker; keep OpenClaw in control.
 
 Read these supporting files when relevant:
 
@@ -21,6 +21,7 @@ Read these supporting files when relevant:
 - `{baseDir}/references/project-contract.md`
 - `{baseDir}/references/claude-worker-prompt.md`
 - `{baseDir}/references/review-rubric.md`
+- `{baseDir}/references/review-runner.md`
 - `{baseDir}/references/telegram-report.md`
 - `{baseDir}/references/setup-and-recovery.md`
 
@@ -73,7 +74,7 @@ Select a verification mode when implementation work is about to start, announce 
 
 Mode workflows:
 
-- **FAST:** Claude implements → relevant automated gates → short UI smoke when the change affects visible web UI → the parent inspects the diff and result itself. A separate deep Codex review is not mandatory. If any gate fails or higher risk is discovered mid-task, escalate to STANDARD before continuing.
+- **FAST:** Claude implements → relevant automated gates → short UI smoke when the change affects visible web UI → the host performs independent review at the slice boundary before DONE. The deterministic checks may be smaller, but the parent cannot approve its own work. If any gate fails or higher risk is discovered mid-task, escalate to STANDARD before continuing.
 - **STANDARD:** the normal flow of this skill: task → Claude Code → project-native gates → browser/UI smoke for web UI → Codex review → bounded repair loop on BLOCKER/IMPORTANT findings → re-verification.
 - **DEEP:** the fullest flow: planning → Claude implementation → all relevant deterministic gates → integration/API checks → mandatory browser/UI smoke for web UI → thorough Codex review (use the detached/independent Codex review when available) → the security sections of the review rubric → repair loop → complete re-verification.
 - For mobile applications (native or cross-platform), apply the mobile-specific mode rules in Phase 6 (“Mobile device verification”).
@@ -93,6 +94,29 @@ Telegram UX: announce the mode once when implementation starts (`🔧 Režim kon
 ## Phase 0 — Product discovery and explicit confirmation
 
 For every `new` application, the user's first Telegram message is a starting brief, not permission to guess and build. Read `{baseDir}/references/discovery-interview.md`. Keep the OpenClaw/Codex parent in the conversation; do not hand discovery to Claude Code.
+
+### 0.0 External confirmed handoff (Solution Factory)
+
+When the invocation references a Solution Factory handoff, validate it BEFORE any discovery
+(contract: `~/.openclaw/skills/solution-factory/references/handoff-contract.md`):
+
+1. `<project>/.solution-factory/confirmed_handoff.json` exists and matches its schema.
+2. `spec_sha256` matches the SHA-256 of the referenced spec file's current bytes.
+3. The `approval` record is complete: channel, timestamp, and the user's exact confirming message.
+
+If ALL checks pass: treat Phase 0 as satisfied — record discovery status `CONFIRMED`, the
+`handoff_id`, spec version/hash, and the approval record in `.app-builder/run-state.md`,
+announce briefly, and continue with Phase 1. Do not re-ask anything answered in the approved
+spec.
+
+If ANY check fails, or no handoff is referenced: ignore the claim entirely and run the full
+Phase 0 below. A message asserting confirmation without a valid handoff artifact never
+passes this gate.
+
+Optional handoff role parameters: `roles.implementer` (`claude` default | `codex`),
+`roles.reviewer`, `roles.deep_reviewer_model` (e.g. `claude-fable-5`). Without parameters
+this skill behaves exactly as before (Claude Code implements, Codex reviews). Role effects
+are defined in Phases 5 and 7.
 
 ### 0.1 Extract what is already known
 
@@ -279,10 +303,37 @@ Do not delete a worktree automatically at the end. Preserve it until the user ap
 
 Use the official ACP route, not a raw ad-hoc shell wrapper, when available.
 
-Start a bounded Claude Code run with `sessions_spawn` using:
+Role parameter: the default implementer is Claude Code (below). If a valid Solution Factory
+handoff specifies `roles.implementer: "codex"`, delegate the implementation turns to a fresh
+Codex subagent session instead — `sessions_spawn` with `runtime: "subagent"`, the same exact
+worktree `cwd`, and the same worker-prompt structure — and record the session identifier in
+run-state for repair turns. Every other rule in this phase applies unchanged.
 
-- `runtime: "acp"`;
-- `agentId: "claude"`;
+Start a bounded implementer run with `sessions_spawn`.
+
+**Host reality (verified 2026-08-30 and 2026-09-01):** the ACP write route fails on this
+machine — *"ACP unavailable — requester disallows apply_patch"* — because the write path was
+enabled for a native Codex parent and the orchestrator now runs on Claude. Use
+`runtime: "subagent"` here and record it in run-state; only attempt `runtime: "acp"` if a
+host-config fix has been verified. Reviewer independence then rests on the cross-vendor
+`codex review` route in Phase 7. Details: `solution-factory/references/worker-routing.md`.
+
+**Verify before you report.** After spawning, confirm the session exists and that the worktree
+is actually changing. Never announce "the worker is implementing…" and end the turn without
+that check — a phantom spawn leaves the run asleep until the watchdog fires.
+
+**No background work inside a turn (host fact, verified 2026-09-02).** OpenClaw kills the
+whole claude-cli process tree at the end of EVERY turn (`close reason=restart`) and at the turn
+timeout (`reason=abort`). A Claude Code `Agent` started with `run_in_background`, a detached
+shell, or anything "running in the background" dies with the turn — twice a run announced a
+worker that never existed. Run the worker in the foreground, wait for it, verify its output in
+the same turn, and size slices so one implementation turn fits the budget in
+"Turn budget and continuation" below.
+
+Parameters:
+
+- `runtime: "subagent"` (or `"acp"` only if verified working on this host);
+- `agentId: "claude"` (ACP only);
 - `mode: "run"`;
 - `cwd`: the exact isolated worktree;
 - a clear label;
@@ -389,15 +440,60 @@ Opening the web build of a native or cross-platform mobile application in a narr
 
 Record each command, exit code, and concise result in `.app-builder/run-state.md`.
 
-## Phase 7 — Codex review
+## Phase 7 — Host-owned independent review
 
-The reviewer must be independent of Claude Code and must not edit the worktree during review.
+The orchestrator requests review; the host watchdog executes it outside the model harness.
+The implementer and parent must never create their own approval or mark a project DONE.
+The gate applies before DONE in every verification mode, including FAST.
 
-Preferred reviewer order:
+1. Keep `Current slice: S1`, `Verification mode: STANDARD|DEEP|FAST`, and
+   `Orchestrator model: <actual runtime model>` in the run-state header. Record the actual
+   model after an approved silent backend fallback; do not infer it from an old session.
+2. After implementation and deterministic verification, call:
+   `node "$HOME/.openclaw/scripts/app-builder-review.js" request --project <worktree> --slice S1 --backend <actual-runtime-model>`.
+   Add `--final` when the entire agreed application is ready. Release the worker lock and
+   finish this turn. The external five-minute watchdog launches the host runner; do not
+   start a duplicate reviewer. For supervised diagnostics, `run --project <worktree>` runs
+   a queued request immediately.
+3. The host runs the frozen test contract and reviews a separate snapshot of ALL current
+   source against the spec and acceptance criteria. It uses subscription-authenticated
+   read-only CLI sessions. A model-written PASS, command description or empty Git diff
+   is never an approval receipt.
+4. Default route: fresh `codex exec review` through ChatGPT. A known GPT orchestrator
+   fallback skips nested Codex and starts pinned Fable. An actual nested-Codex decline
+   goes directly to Fable without retry; HTTP 401 gets one retry after 30 seconds.
+5. Fable runs in a fresh acpx Claude session pinned to `claude-fable-5`, with
+   `--approve-reads --non-interactive-permissions deny --no-terminal` and only Read/Glob/Grep.
+   This is mandatory before any weaker fallback. DEEP also adds this review after Codex
+   succeeds. Use the installed runner, not a guessed agentId or the implementer's session.
+6. A fresh read-only adversarial Claude CLI session is the last fallback only after both
+   previous routes are unavailable. Disclose it as weaker same-family review. A real HOLD
+   never triggers provider fallback: repair its findings in Phase 8. DEEP with a Codex PASS
+   but unavailable required Fable stays pending; it cannot skip the additional review.
+7. Inspect `app-builder-review.js status --project <worktree>`. Central host state holds
+   attempts, tests, findings, source hash and signed receipts. `changes_requested` allows
+   the bounded repair continuation; `approved` allows finishing the slice. No valid result
+   means BLOCKED / REVIEW-pending / needs-attention, never DONE. There are at most two hourly
+   provider retries; after fixing a concrete blocker a deliberate `request --retry` is allowed.
+8. After final review and all other delivery conditions, only
+   `app-builder-review.js complete --project <worktree>` writes DONE and closes the Factory
+   state. The final outbox record must use `kind: "completion"`; the watchdog withholds it
+   without a valid host completion. Always report the actual reviewer and review strength.
 
-1. The native Codex parent agent reviews the full diff, confirmed contract, and verification evidence using `{baseDir}/references/review-rubric.md`.
-2. For medium- and high-risk changes, additionally use a fresh detached Codex review when available, such as a native `codex review --base <base-branch>` command or an isolated Codex reviewer session.
-3. If Codex review is unavailable, stop before calling the task approved. Report that implementation and deterministic gates passed but independent model review is pending.
+With `roles.implementer: "codex"`, the first independent reviewer is the fresh pinned Claude
+route. Never review in the implementer's resumed context. Changing source invalidates old
+approval; repairs require fresh tests and review. Missing/unsupported executable checks are
+needs-attention, not grounds to relax the gate. The host supports pytest, Node tests and
+npm test/build contracts; explicit existing test entrypoints can be registered with
+`configure --checks-file <json> --project <worktree>`. Do not replace a frozen check contract
+or edit host state, signing keys or receipts. See `{baseDir}/references/review-runner.md`.
+
+The watchdog blocks its continuation and Factory closing paths until this gate permits
+progress; only a host HOLD permits a focused repair continuation. `--force` cannot approve
+unfinished review. Historical audited baselines are exact, locally registered snapshots,
+not a mechanism for approving new work. WAITING_USER/PAUSE and external-action approvals
+still apply. The host gate is a workflow guard, not an OS boundary against an unrestricted
+local administrator or a guarantee that an application contains no bugs.
 
 Classify each finding:
 
@@ -444,6 +540,93 @@ Stop early and ask the user for a decision when:
 
 When escalating, include the exact blocker, evidence, attempts made, and two practical choices with trade-offs.
 
+## Turn budget and continuation (host-executable, since 1.5.0)
+
+**Why this section exists.** On this host a build is a loop of short turns over state on disk.
+Nothing may depend on the agent surviving a turn or scheduling its own next turn:
+
+- every turn is hard-killed at `agents.defaults.timeoutSeconds` (1800 s; turns started by the
+  continuator get 5400 s) and after ~600 s without any output;
+- the agent cannot reliably schedule itself: the OpenClaw `cron` tool is stripped for
+  non-owner senders and Claude Code's `CronCreate`/`ScheduleWakeup` are disabled in the
+  claude-cli harness. The 1.4.1 "one-shot cron nudge" rule never produced a single job.
+
+The wake-up engine is therefore the external, model-free **continuator**
+(`~/.openclaw/scripts/app-builder-watchdog.js`, Windows task every 5 min, see
+`{baseDir}/references/setup-and-recovery.md`). It sends `continue <project dir>` as a one-shot
+OpenClaw cron turn in `session:main` (serialized with every other turn of this agent, 5400 s
+budget) whenever (a) the agent asked for it, or (b) an active run has not touched
+`run-state.md` for 20 minutes. Its guards are mechanical — a live `auto-continue:` cron job,
+a running app-builder session, a fresh `lock.json`, a daily cap of 8 triggers per project,
+and an unchanged hash of the frozen spec files from `confirmed_handoff.json` — so a turn that
+misbehaves is stopped by the machine, not by prose. The final text of every continuator turn
+is delivered to the user's Telegram by the runner, so end such a turn with 1–3 sentences for
+the user, or exactly `NO_REPLY` when there is nothing to report. Every turn starts without
+memory (the CLI conversation is discarded after timeouts and fallbacks): read
+`run-state.md`, `git status`, `git log` first, never "as discussed above". Your duties:
+
+1. **Turn start — lock, and NEVER judge a foreign lock's aliveness yourself.**
+   Before writing anything, read the existing `.app-builder/lock.json`, if any. If it has a
+   future `expires_at` and an `owner` that is not you: **call `ListAgents` and check for any
+   other `workspace-app-builder-*` (or equivalent) peer session that is not `offline`/dead.**
+   - Any such live peer exists, or you cannot rule one out → the lock is live: reply `NO_REPLY`
+     and stop. Do not reason about whether the owner is "plausibly" still running — that
+     judgment call is exactly what caused two orchestrator sessions (`fa`/`fb`) to write to the
+     same tree concurrently on 2026-09-03 (root cause: a model fallback made one turn's own
+     identity look foreign to itself, and it guessed "dead" instead of checking). You are never
+     the one who gets to decide a fresh lock is stale — only the external watchdog does that,
+     because it can see every session, not just itself.
+   - No live peer found in `ListAgents` at all → still treat the lock as live and stop; a
+     peer that predates your CLI's own session list (e.g. spawned by a different bridge) will
+     not necessarily show up. Reclaiming a lock is the watchdog's job, not yours.
+   - Only a lock with a **past** `expires_at`, or no lock file at all, is yours to claim.
+   Write `.app-builder/lock.json` `{"owner": "<session/run id or ISO timestamp>", "started_at":
+   "<ISO>", "expires_at": "<ISO, now + 90 min>"}`. The continuator caps any lock at 100 minutes
+   after `started_at` and moves genuinely orphaned locks (owner's turn ended, confirmed by the
+   watchdog's own cross-session checks) to `.app-builder/history/` before waking the next turn —
+   that is the only legitimate way a lock gets reclaimed early.
+   - **If you ever discover mid-turn that a peer session was already working the same tree**
+     (uncommitted changes you did not make, a lock file you did not write, files you do not
+     recognize): stop editing immediately, do not try to merge or out-race it, and escalate to
+     Ivan asking which session should continue — do not decide this yourselves between peers.
+2. **Turn size and checkpoints.** Plan work in steps of roughly 20 minutes: one foreground
+   worker slice, then verification; if a slice needs more, split it. Keep individual tool calls
+   chatty (a silent Bash of 10 minutes gets the turn killed). Commit work in progress
+   (`wip: <slice> — <what is done>`) before every verification step and at least every ~15
+   minutes: the continuator measures progress by git HEAD and the `Status:` value, and a turn
+   that leaves nothing committed counts as no progress. Never run `git reset`, `git checkout --`,
+   `rebase`, force-push or `git init` in an auto-continued turn, and never edit the frozen
+   spec/UI files — the continuator pauses the project when their hash changes.
+3. **Turn end, run not `DONE`/`ABORTED` — ask to be woken.** Update `Status:` and
+   `Next action:` in `run-state.md`, then write `.app-builder/continue-request.json`
+   `{"requested_at": "<ISO>", "not_before": "<ISO>", "reason": "<what comes next>", "expected_head": "<git HEAD sha>"}`
+   (`not_before` = now + 1 min; for a provider-limit wait use reset time + 5 min and set
+   `Status: WAITING`), delete `lock.json`, end the turn. The continuator consumes the file
+   and delivers `continue` within ~5 minutes — never wait actively, never poll.
+4. **On `continue`.** Read `run-state.md`, `git status`/`git log`, and `continue-request.json`
+   if it still exists (the continuator moves it to `.app-builder/history/` as
+   `continue-request.consumed-*.json`; a request whose `expected_head` no longer matches HEAD
+   is dropped as stale without a turn — the audit trail is in `history/`). If the message says
+   "automatické pokračovanie … run-state bez zmeny", the previous turn died without asking:
+   inspect uncommitted worker output, commit sensible WIP, and resume from the recorded next
+   action. Never rebuild a finished slice, never re-freeze a spec.
+5. **No-op rules stay.** A `continue` that arrives after the run advanced past the recorded
+   next action, while another turn holds a fresh lock, or when the run is `DONE`/`ABORTED`:
+   check briefly, answer in one line, do nothing else.
+6. **Pause.** A file `.app-builder/PAUSE` in the project (or a global pause file next to the
+   watchdog) stops automatic continuation. The continuator creates it itself after 8 triggers
+   in 24 hours or when a frozen spec file changed, and tells the user why. Do not create it
+   yourself unless the user asks; when you escalate, tell the user they can say
+   "pauza <projekt>" to the main agent.
+7. **Finish.** Use the host `complete` command for DONE, then deliver the final outbox report
+   with `kind: "completion"`. For an explicit ABORTED outcome, deliver the abort report.
+   Delete `lock.json` and any obsolete `continue-request.json` in the same step; the host
+   handles approved Factory completion (see "State and recovery").
+
+The provider-limit rule in the workspace AGENTS.md follows the same mechanism: save state,
+report to the user, write `continue-request.json` with `not_before` = reset + 5 min, end the
+turn.
+
 ## Phase 9 — Definition of done
 
 A task is done only when all applicable conditions are true:
@@ -451,7 +634,11 @@ A task is done only when all applicable conditions are true:
 - acceptance criteria are met;
 - required deterministic gates pass;
 - the actual workflow was smoke-tested when feasible;
-- no BLOCKER or IMPORTANT review findings remain;
+- an independent review per Phase 7 HAS ACTUALLY RUN and left no BLOCKER or IMPORTANT
+  findings — the parent verifying its own orchestrated work does NOT satisfy this, and in
+  DEEP mode the pinned-model review applies. If the reviewer is unavailable, the run must
+  stop at REVIEW-pending and say so, never claim done (violated on 2026-08-30,
+  firemna-prirucka — do not repeat);
 - migrations and rollback implications are understood;
 - documentation and task state are updated;
 - `git diff` contains no unrelated or secret material;
@@ -465,7 +652,11 @@ For a new app, each milestone must also have a documented way to run it locally 
 
 ## Phase 10 — Telegram reporting
 
-Use `{baseDir}/references/telegram-report.md`.
+Use `{baseDir}/references/telegram-report.md`, including its delivery rule: every send goes
+through the `message` tool with explicit `channel: "telegram"` and `target: "<configured-telegram-chat-id>"`
+(never `chatId`, never the default "current conversation" — that is internal-ui, not the user);
+a result without a Telegram message id is a failed delivery, and a failed delivery is written
+to `.app-builder/outbox.jsonl` so the model-free watchdog delivers it.
 
 During long runs, send brief updates only at meaningful boundaries:
 
@@ -499,9 +690,16 @@ Maintain `.app-builder/run-state.md` with:
 
 - task id and mode;
 - a `Status:` line as the first state field, using exactly one of `PLANNING`, `IMPLEMENTING`,
-  `VERIFYING`, `REVIEW`, `BLOCKED`, `WAITING`, `DONE`, or `ABORTED`, and rewrite it whenever the
-  phase changes. An external watchdog reads this line to detect a run that died mid-build, so a
-  stale or missing value is what makes a lost run stay lost;
+  `VERIFYING`, `REVIEW`, `BLOCKED`, `WAITING`, `WAITING_USER`, `WAITING_PROVIDER`,
+  `READY_FOR_UAT`, `DONE`, or `ABORTED`, and rewrite it whenever the phase changes. The
+  external watchdog/continuator reads this line: `PLANNING`/`IMPLEMENTING`/`VERIFYING`/`REVIEW`
+  are "the agent is working" and get auto-continued after 20 quiet minutes; `BLOCKED`/`WAITING`/
+  `WAITING_PROVIDER` alert the user after 90 minutes and are continued only on an explicit
+  `continue-request.json`; `WAITING_USER`/`READY_FOR_UAT` are silent for 6 hours, then one
+  reminder. A stale or missing value is what makes a lost run stay lost;
+- a literal `Next action:` line (with the colon — the watchdog parses it);
+- `delivered_via:` for the last user-facing message (`telegram:<message id>` / `outbox` /
+  `relayed-by-main` / `FAILED`);
 - discovery status: `DRAFT`, `QUESTIONS`, `AWAITING_CONFIRMATION`, or `CONFIRMED`;
 - confirmed scope, confirmation source/time, and a short confirmation record;
 - repository and worktree paths;
@@ -526,10 +724,31 @@ On `continue` or after interruption:
 5. never silently start a fresh implementation context when a recorded resume session should exist;
 6. if the upstream session is unavailable, create a new Claude run with a compact handoff containing the state, confirmed scope, diff summary, test output, and open findings.
 
-Set `Status: DONE` (or `ABORTED`) as the last action of a run, after the final report is delivered.
+Use the host `complete` command for DONE after a final approval and delivery prerequisites, then deliver the final outbox report with `kind: "completion"`. ABORTED remains a separate explicit terminal outcome.
 While a run is open, touch the state file at every phase change even when nothing else changed: the
-watchdog treats an unchanged file as a stalled run and will alert the user directly. See
-`{baseDir}/references/setup-and-recovery.md` for the watchdog itself.
+continuator treats an unchanged file as a stalled run and will re-send `continue` (and eventually
+alert the user). See `{baseDir}/references/setup-and-recovery.md` for the watchdog itself.
+
+Companion files in `.app-builder/` (all machine-read by the continuator):
+
+- `lock.json` — held while a turn works (see "Turn budget and continuation"); delete at turn end;
+- `continue-request.json` — "wake me up" request written at turn end; consumed by the
+  continuator (renamed to `continue-request.consumed-<ts>.json`);
+- `outbox.jsonl` — one JSON object per line `{"ts": "<ISO>", "text": "<message>"}` for every
+  user-facing message the `message` tool could not deliver (see Phase 10); the watchdog sends
+  unsent lines to the user's Telegram within ~5 minutes and marks them `"sent": true`;
+- `PAUSE` — presence stops automatic continuation (user-controlled).
+
+**Closing duty (Solution Factory).** DONE is written through the host `complete` command,
+which also closes an executing/review/QA Factory state. Preserve READY_FOR_UAT when user
+acceptance is still required; do not call complete prematurely. For an explicit ABORTED outcome, when
+`<project>/.solution-factory/run-state.json` exists with status `EXECUTING`, update that file
+in the same step: `status` → `DONE`/`ABORTED` (or `READY_FOR_UAT` when the Factory handoff
+asks for user acceptance), `updated_at`, and append the closing phase to `phases[]`. A build
+that ends via `continue` otherwise leaves the Factory state open forever (2026-08-30). The
+watchdog mirrors a terminal builder status into a still-open Factory file within 5 minutes as
+a backstop (`closed by watchdog`), so a killed final turn cannot leave the Factory hanging —
+but `READY_FOR_UAT` semantics are yours, the watchdog only writes `DONE`/`ABORTED`.
 
 ## Efficiency policy
 
@@ -558,4 +777,4 @@ ACP Claude runs on the Gateway host under the external harness permissions and s
 
 ## Host note (updated 2026-08-16, operator approved option B)
 
-The full ACP write path is enabled on this host **only for the dedicated `app-builder` agent** (native Codex parent, `sandbox off`, ACPX `permissionMode=approve-all`). When running as the `app-builder` agent, use the official ACP route per Phase 5. When this skill is invoked from any other agent (for example `main`), host-side ACP spawns are blocked by that agent's tool policy — in that case delegate implementation turns via `sessions_spawn` with `runtime: "subagent"` and keep every other gate unchanged, or tell the user to switch to the App Builder conversation (`/focus agent:app-builder:main` in Telegram). Because ACP workers write without per-action approval here, be extra strict about the confirmation gates, the isolated worktree `cwd`, and the prohibition list in this skill.
+**Superseded 2026-09-01 — read the Phase 5 "Host reality" note first: the ACP write path is currently broken on this host for every agent, including `app-builder`.** Historical context: the full ACP write path was enabled on this host **only for the dedicated `app-builder` agent** (native Codex parent, `sandbox off`, ACPX `permissionMode=approve-all`). When running as the `app-builder` agent, use the official ACP route per Phase 5. When this skill is invoked from any other agent (for example `main`), host-side ACP spawns are blocked by that agent's tool policy — in that case delegate implementation turns via `sessions_spawn` with `runtime: "subagent"` and keep every other gate unchanged, or tell the user to switch to the App Builder conversation (`/focus agent:app-builder:main` in Telegram). Because ACP workers write without per-action approval here, be extra strict about the confirmation gates, the isolated worktree `cwd`, and the prohibition list in this skill.

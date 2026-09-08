@@ -1,14 +1,16 @@
 # Watchdog — inštalácia a ladenie
 
-Watchdog je jeden Node skript bez závislostí. Nepotrebuje bežiaci model ani gateway, preto ho
+Watchdog a host review runner sú dva Node skripty bez ďalších npm závislostí. Nepotrebuje bežiaci model ani gateway, preto ho
 spúšťa plánovač operačného systému, nie OpenClaw cron — cron by pri spadnutej gateway nebežal
 a práve vtedy je watchdog potrebný najviac.
 
 ## Predpoklady
 
-- Node.js (testované na Node 24; skript používa vstavaný `fetch`, teda Node 18+).
+- Node.js 24 so vstavaným SQLite (testované prostredie host runnera).
 - OpenClaw s nakonfigurovaným Telegram kanálom v `~/.openclaw/openclaw.json`.
-- Skopírovaný `scripts/app-builder-watchdog.js`, napríklad do `~/.openclaw/scripts/`.
+- Spoločne skopírované `scripts/app-builder-watchdog.js` a `scripts/app-builder-review.js` do `~/.openclaw/scripts/`.
+- Pre Phase 7 prihlásený Codex cez ChatGPT a Claude Code cez predplatné, plus nainštalovaný acpx.
+- Aktuálne workspace pravidlá a skill podľa [review-runner.md](review-runner.md).
 
 ## Overenie pred nasadením
 
@@ -28,8 +30,8 @@ node app-builder-watchdog.js --test
 ```powershell
 $action  = New-ScheduledTaskAction -Execute "C:\Program Files\nodejs\node.exe" `
                                    -Argument "$HOME\.openclaw\scripts\app-builder-watchdog.js"
-$every10 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
-                                    -RepetitionInterval (New-TimeSpan -Minutes 10)
+$every5 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
+                                    -RepetitionInterval (New-TimeSpan -Minutes 5)
 $atLogon = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
                                          -StartWhenAvailable -MultipleInstances IgnoreNew `
@@ -37,7 +39,7 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 
 Register-ScheduledTask -TaskName "OpenClaw-AppBuilder-Watchdog" `
-                       -Action $action -Trigger @($every10, $atLogon) `
+                       -Action $action -Trigger @($every5, $atLogon) `
                        -Settings $settings -Principal $principal -Force
 ```
 

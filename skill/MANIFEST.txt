@@ -1,4 +1,4 @@
-ivan-app-builder-v1.3.2/
+ivan-app-builder-v1.6.0/
 ├── SKILL.md
 ├── README-SK.md
 ├── PROMPT-PRE-CLAUDE-CODE.md
@@ -12,6 +12,8 @@ ivan-app-builder-v1.3.2/
 │   ├── discovery-interview.md
 │   ├── discovery-smoke-test.md
 │   ├── project-contract.md
+│   ├── review-runner.md
+│   ├── host-workspace-rules.md
 │   ├── review-rubric.md
 │   ├── setup-and-recovery.md
 │   └── telegram-report.md

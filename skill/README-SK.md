@@ -113,3 +113,10 @@ Očakávaná prvá odpoveď sú otázky, nie kód.
 - force-push alebo mazanie dát.
 
 ACP Claude beží na hostiteľovi. Plnoautomatický zápis povoľ až v oddelenom vývojovom účte, VM alebo serveri bez produkčných tajomstiev. Skill obmedzuje `cwd` a Git worktree, ale nenahrádza izoláciu operačného systému.
+
+## Host review gate (1.6.0)
+
+Phase 7 teraz vykonáva externý runner, nie rodičovský model. Nainštaluj oba skripty podľa
+[review-runner.md](references/review-runner.md) a doplň [workspace pravidlá](references/host-workspace-rules.md).
+DONE vyžaduje platné testy, nezávislú review aktuálneho kódu a host completion. GPT fallback
+začína Fable; slabší same-family fallback sa vždy prizná.
