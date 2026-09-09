@@ -1472,8 +1472,11 @@ console.log("\n34b) Host-review alerts ignore normal running state and deduplica
   check("queued/running review neposiela poplašnú správu", !sink(queuedRoot).some((text) => text.includes("Phase 7 review gate")), sink(queuedRoot).join("\n"));
 
   const failedRoot = fresh("host-review-stable-alert");
-  prepare(failedRoot, "failed-app", true); run(failedRoot, [], host);
+  prepare(failedRoot, "failed-app", true);
+  backdate(path.join(projectDir(failedRoot, "failed-app"), ".app-builder", "run-state.md"), 180);
+  run(failedRoot, [], host);
   const firstCount = sink(failedRoot).filter((text) => text.includes("Phase 7 review gate")).length;
+  check("review-pending nevytvára súčasne druhý stalled alarm", sink(failedRoot).length === 1, sink(failedRoot).join("\n"));
   const state = readState(failedRoot); state.alerts["review-gate:failed-app"].sentAt = Date.now() - 3 * 60 * 60_000; writeState(failedRoot, state);
   fs.appendFileSync(path.join(projectDir(failedRoot, "failed-app"), ".app-builder", "run-state.md"), "\n");
   run(failedRoot, [], host);

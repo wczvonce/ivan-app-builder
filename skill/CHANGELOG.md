@@ -8,7 +8,8 @@
 - Two ordinary provider retries remain bounded, with one additional retry allowed only after a
   provider explicitly reports a future reset. Large DEEP routes now have twelve minutes each.
 - The watchdog no longer sends Telegram alarms while a review is normally queued/running, and
-  an unchanged needs-attention state is deduplicated across run-state timestamp updates.
+  an unchanged needs-attention state is deduplicated across run-state timestamp updates. A
+  review-gate failure also suppresses the redundant generic stalled-run alarm.
 
 ## 1.6.3 — 2026-09-08
 

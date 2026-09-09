@@ -894,6 +894,7 @@ function stalledRunAlerts(runs, continuatorOn) {
   const alerts = [];
   for (const run of runs) {
     if (run.phase === "terminal" || run.phase === "delegated" || run.phase === "closable") continue;
+    if (run.reviewGate?.blocked) continue;
     // Aktívne behy oživuje continuator (a eskaluje/alarmuje sám); alarm tu ostáva len keď je vypnutý.
     if (continuatorOn && isContinuable(run)) continue;
     const userCourt = run.phase === "user-court";
