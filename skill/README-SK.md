@@ -114,7 +114,7 @@ Očakávaná prvá odpoveď sú otázky, nie kód.
 
 ACP Claude beží na hostiteľovi. Plnoautomatický zápis povoľ až v oddelenom vývojovom účte, VM alebo serveri bez produkčných tajomstiev. Skill obmedzuje `cwd` a Git worktree, ale nenahrádza izoláciu operačného systému.
 
-## Host review gate (1.6.3)
+## Host review gate (1.6.4)
 
 Phase 7 teraz vykonáva externý runner, nie rodičovský model. Nainštaluj oba skripty podľa
 [review-runner.md](references/review-runner.md) a doplň [workspace pravidlá](references/host-workspace-rules.md).

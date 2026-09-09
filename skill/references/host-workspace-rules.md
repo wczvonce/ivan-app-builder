@@ -1,4 +1,4 @@
-## Povinný host review runner (1.6.3)
+## Povinný host review runner (1.6.4)
 
 Po implementácii a po každej oprave požiadaj host o Phase 7:
 `node "$HOME/.openclaw/scripts/app-builder-review.js" request --project <worktree> --slice S1 --backend <skutočný model>`.

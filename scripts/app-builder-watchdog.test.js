@@ -1453,6 +1453,34 @@ console.log("\n34) Host runner integration: forged DONE, automatic queue, HOLD r
   check("--force cannot bypass stale completion", refused);
 }
 
+console.log("\n34b) Host-review alerts ignore normal running state and deduplicate unchanged failures");
+{
+  const host = { WATCHDOG_TEST_LEGACY_REVIEW: "0", WATCHDOG_DISABLE_CONTINUE: "1" };
+  const prepare = (root, project, execute) => {
+    const dir = projectDir(root, project);
+    writeRunState(root, project, "Status: REVIEW\nCurrent slice: S1\nVerification mode: STANDARD\nOrchestrator model: anthropic/claude-opus-4-8\n", 1);
+    fs.writeFileSync(path.join(dir, "app.test.js"), "require('node:test')('real test',()=>{});\n");
+    fs.writeFileSync(path.join(dir, "APP_SPEC.md"), "The fixture remains valid.\n");
+    execFileSync(process.execPath, ["-e", `
+      const {createService}=require(process.argv[1]);
+      const service=createService({root:process.argv[2],invokeRoute:async()=>({outcome:'unavailable',error:'offline'})});
+      (async()=>{service.request(process.argv[3]);if(process.argv[4]==='run')await service.run(process.argv[3]);})().catch(e=>{console.error(e);process.exit(1)});
+    `, path.join(__dirname, "app-builder-review.js"), path.join(root, "review-host"), dir, execute ? "run" : "queue"], { encoding: "utf8", windowsHide: true });
+  };
+  const queuedRoot = fresh("host-review-quiet-running");
+  prepare(queuedRoot, "queued-app", false); run(queuedRoot, [], host);
+  check("queued/running review neposiela poplašnú správu", !sink(queuedRoot).some((text) => text.includes("Phase 7 review gate")), sink(queuedRoot).join("\n"));
+
+  const failedRoot = fresh("host-review-stable-alert");
+  prepare(failedRoot, "failed-app", true); run(failedRoot, [], host);
+  const firstCount = sink(failedRoot).filter((text) => text.includes("Phase 7 review gate")).length;
+  const state = readState(failedRoot); state.alerts["review-gate:failed-app"].sentAt = Date.now() - 3 * 60 * 60_000; writeState(failedRoot, state);
+  fs.appendFileSync(path.join(projectDir(failedRoot, "failed-app"), ".app-builder", "run-state.md"), "\n");
+  run(failedRoot, [], host);
+  const secondCount = sink(failedRoot).filter((text) => text.includes("Phase 7 review gate")).length;
+  check("rovnaké needs-attention sa po zmene mtime znovu neposiela", firstCount === 1 && secondCount === 1, sink(failedRoot).join("\n"));
+}
+
 console.log("\n35) Registered isolated worktree outside project roots remains scheduled");
 {
   const root = fresh("external-worktree"), host = { WATCHDOG_TEST_LEGACY_REVIEW: "0" };

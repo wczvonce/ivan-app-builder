@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.4 — 2026-09-09
+
+- Automatic host-review retries preserve the last explicit slice and orchestrator backend even
+  after the host rewrites the human run-state header. Historical log lines can no longer turn
+  the active slice into an older slice or the backend into `unknown`.
+- Two ordinary provider retries remain bounded, with one additional retry allowed only after a
+  provider explicitly reports a future reset. Large DEEP routes now have twelve minutes each.
+- The watchdog no longer sends Telegram alarms while a review is normally queued/running, and
+  an unchanged needs-attention state is deduplicated across run-state timestamp updates.
+
 ## 1.6.3 — 2026-09-08
 
 - A Claude/ACPX session-limit banner is now treated as provider unavailability even when the

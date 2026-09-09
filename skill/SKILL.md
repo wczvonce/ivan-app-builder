@@ -1,7 +1,7 @@
 ---
 name: ivan-app-builder
 description: "Interview the user and confirm a product specification before coding, then orchestrate Codex planning/review and Claude Code implementation through ACP with tests and bounded repair loops."
-version: "1.6.3"
+version: "1.6.4"
 user-invocable: true
 disable-model-invocation: false
 metadata:

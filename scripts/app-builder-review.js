@@ -13,7 +13,7 @@ const VERSION = 1;
 const HASH = /^[a-f0-9]{64}$/;
 const MAX_FILES = 12000;
 const MAX_BYTES = 40 * 1024 * 1024;
-const ROUTE_TIMEOUT = 8 * 60_000;
+const ROUTE_TIMEOUT = 12 * 60_000;
 const RUN_TIMEOUT = 35 * 60_000;
 const CODEX_REVIEW_MODEL = "gpt-6-astra";
 const CODEX_REVIEW_REASONING = "high";
@@ -394,11 +394,28 @@ function createService(options = {}) {
   }
   function metadata(project) {
     const text = fs.readFileSync(path.join(project, ".app-builder", "run-state.md"), "utf8");
+    const header = text.split(/^(?:## |\d{4}-\d{2}-\d{2})/m)[0];
     const handoff = json(path.join(project, ".solution-factory", "confirmed_handoff.json"), {});
-    return { slice: text.match(/^[-*]?\s*Current slice:\s*(S\d+)\b/im)?.[1] || "run",
-      mode: text.match(/Verification[_ ]mode:\s*(FAST|STANDARD|DEEP)/i)?.[1]?.toUpperCase() || handoff.verification_mode || "STANDARD",
-      backend: text.match(/^[-*]?\s*Orchestrator model:\s*([^\r\n]+)/im)?.[1] || "unknown",
-      implementer: handoff.roles?.implementer || "claude" };
+    return { slice: header.match(/^[-*]?\s*Current slice:\s*(S\d+)\b/im)?.[1] || null,
+      mode: header.match(/Verification[_ ]mode:\s*(FAST|STANDARD|DEEP)/i)?.[1]?.toUpperCase() || handoff.verification_mode || null,
+      backend: header.match(/^[-*]?\s*Orchestrator model:\s*([^\r\n]+)/im)?.[1] || null,
+      implementer: handoff.roles?.implementer || null };
+  }
+  function lastKnownMetadata(project, previous) {
+    if (previous?.backend && previous.backend !== "unknown") return previous;
+    const runs = path.join(location(project), "runs");
+    if (!fs.existsSync(runs)) return previous || {};
+    const states = fs.readdirSync(runs, { withFileTypes: true }).filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(runs, entry.name, "state.json")).filter((file) => fs.existsSync(file))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    return states.map((file) => json(file)).find((state) => state?.backend && state.backend !== "unknown") || previous || {};
+  }
+  function providerResetScheduled(state) {
+    return state?.retry_kind === "provider-reset" || (Number.isFinite(state?.retry_after) &&
+      state.attempts?.some((attempt) => Number.isFinite(attempt.retry_at) && attempt.retry_at === state.retry_after));
+  }
+  function automaticRetryAllowed(state) {
+    return (state?.provider_retries || 0) < 2 || (providerResetScheduled(state) && !state?.reset_retry_used);
   }
   function setRunState(project, status, next) {
     const file = path.join(project, ".app-builder", "run-state.md");
@@ -417,7 +434,13 @@ function createService(options = {}) {
     const previous = load(dir);
     if (previous?.status === "running" && recordAlive(previous)) return previous;
     const { retry = false, ...requested } = config;
-    const meta = { ...metadata(dir), ...requested };
+    const discovered = metadata(dir), prior = lastKnownMetadata(dir, previous);
+    const meta = {
+      slice: requested.slice ?? discovered.slice ?? prior.slice ?? "run",
+      mode: requested.mode ?? discovered.mode ?? prior.mode ?? "STANDARD",
+      backend: requested.backend ?? discovered.backend ?? prior.backend ?? "unknown",
+      implementer: requested.implementer ?? discovered.implementer ?? prior.implementer ?? "claude",
+    };
     if (!/^(?:S\d+|run)$/.test(meta.slice) || !["STANDARD", "DEEP", "FAST"].includes(meta.mode) || !["claude", "codex"].includes(meta.implementer)) throw new Error("Invalid review request");
     let contract = json(path.join(location(dir), "checks.json"));
     if (!contract) {
@@ -428,14 +451,17 @@ function createService(options = {}) {
     const same = previous?.source_hash === snap.source_hash && previous.slice === meta.slice;
     if (same && ["queued", "changes_requested"].includes(previous.status)) return previous;
     if (same && previous.status === "approved" && (!config.final || previous.final)) return previous;
-    if (same && previous.status === "needs_attention" && !retry && (!previous.retry_after || time() < previous.retry_after || previous.provider_retries >= 2)) return previous;
+    if (same && previous.status === "needs_attention" && !retry && (!previous.retry_after || time() < previous.retry_after || !automaticRetryAllowed(previous))) return previous;
     const total = previous?.repairs_total || 0;
     const perSlice = previous?.repairs_by_slice || {};
+    const usesResetRetry = same && previous?.status === "needs_attention" && (previous.provider_retries || 0) >= 2 &&
+      providerResetScheduled(previous) && time() >= previous.retry_after;
     const state = { version: VERSION, project: dir, request_id: crypto.randomUUID(), source_hash: snap.source_hash,
       ...meta, status: "queued", requested_at: time(), repairs_total: total, repairs_by_slice: perSlice,
       watchdog_registered: true,
       checks_hash: contract.hash, attempts: [], final: Boolean(config.final || (previous?.slice === meta.slice && previous.final)),
       provider_retries: same ? (previous.provider_retries || 0) + 1 : 0,
+      reset_retry_used: Boolean(same && (previous?.reset_retry_used || usesResetRetry)),
       recoveries: (previous?.recoveries || 0) + (previous?.status === "running" ? 1 : 0) };
     if (state.recoveries > 2) throw new Error("Review runner crashed repeatedly; manual attention required");
     if (previous) atomic(path.join(location(dir), "runs", previous.request_id, "state.json"), previous);
@@ -469,7 +495,7 @@ function createService(options = {}) {
         backend: state.backend, route: state.route || null, reviewer_model: state.reviewer_model || null,
         reason: stale ? "Source changed; fresh checks/review required" : state.reason || null,
         request_id: state.request_id, final: state.final, repairs_total: state.repairs_total,
-        retry_due: state.status === "needs_attention" && Boolean(state.retry_after) && time() >= state.retry_after && state.provider_retries < 2,
+        retry_due: state.status === "needs_attention" && Boolean(state.retry_after) && time() >= state.retry_after && automaticRetryAllowed(state),
         interrupted: state.status === "running" && !recordAlive(state),
         heartbeat_at: state.heartbeat_at || null };
     } catch (e) { return { managed: true, status: "needs_attention", approved: false, allow_continue: false, reason: e.message }; }
@@ -614,6 +640,7 @@ function createService(options = {}) {
           state.status = "needs_attention"; state.reason = "Povinná nezávislá review nedobehla s platným výsledkom; REVIEW-pending.";
           const providerResets = state.attempts.map((attempt) => attempt.retry_at).filter((value) => Number.isFinite(value) && value > time());
           state.retry_after = providerResets.length ? Math.min(...providerResets) : time() + 60 * 60000;
+          state.retry_kind = providerResets.length ? "provider-reset" : "hourly";
         }
         else {
           if (sourceSnapshot(project).source_hash !== state.source_hash) throw new Error("Source changed during review; approval is stale");

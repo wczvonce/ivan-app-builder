@@ -22,7 +22,7 @@ function fixture(t, settings = {}) {
   const calls = [], delays = [];
   const service = createService({ root, now: () => clock, delay: async (ms) => { delays.push(ms); clock += ms; },
     invokeRoute: async (route, ...rest) => { calls.push(route); return settings.review ? settings.review(route, ...rest) : success(); }, ...settings.options });
-  return { project, root, service, calls, delays, advance: (ms) => { clock += ms; },
+  return { project, root, service, calls, delays, clock: () => clock, advance: (ms) => { clock += ms; },
     change: (content = "module.exports = (a, b) => a + b; // revised\n") => fs.writeFileSync(path.join(project, "app.js"), content),
     stateText: () => fs.readFileSync(path.join(project, ".app-builder", "run-state.md"), "utf8") };
 }
@@ -76,6 +76,28 @@ test("all routes unavailable -> needs-attention, two bounded hourly retries", as
   for (let i = 0; i < 2; i++) { f.advance(3600001); assert.equal(f.service.inspect(f.project).retry_due, true); f.service.request(f.project); await f.service.run(f.project); }
   f.advance(3600001); assert.equal(f.service.inspect(f.project).retry_due, false);
   assert.equal(f.calls.length, 9); assert.equal(f.service.load(f.project).provider_retries, 2);
+});
+test("one bounded retry remains available after an explicitly reported provider reset", async (t) => {
+  let f;
+  f = fixture(t, { review: () => ({ outcome: "unavailable", error: "subscription-limit", retry_at: f.clock() + 3600000 }) });
+  f.service.request(f.project); await f.service.run(f.project);
+  for (let retry = 1; retry <= 3; retry++) {
+    f.advance(3600001);
+    assert.equal(f.service.inspect(f.project).retry_due, true);
+    f.service.request(f.project); await f.service.run(f.project);
+    assert.equal(f.service.load(f.project).provider_retries, retry);
+  }
+  f.advance(3600001);
+  assert.equal(f.service.inspect(f.project).retry_due, false);
+  assert.equal(f.service.load(f.project).reset_retry_used, true);
+});
+test("automatic retry preserves explicit review metadata after the host rewrites run-state", async (t) => {
+  const f = fixture(t, { review: () => ({ outcome: "unavailable", error: "offline" }) });
+  f.service.request(f.project, { slice: "S7", backend: "anthropic/claude-opus-4-8" }); await f.service.run(f.project);
+  fs.writeFileSync(path.join(f.project, ".app-builder", "run-state.md"), "Status: BLOCKED — REVIEW-pending\n2026-09-01 old log\nCurrent slice: S2\nOrchestrator model: unknown\n");
+  f.advance(3600001); f.service.request(f.project);
+  const state = f.service.load(f.project);
+  assert.equal(state.slice, "S7"); assert.equal(state.backend, "anthropic/claude-opus-4-8");
 });
 test("failed real test returns to repair without spending a model review call", async (t) => {
   const f = fixture(t); f.change("module.exports = () => 3;\n"); f.service.request(f.project);

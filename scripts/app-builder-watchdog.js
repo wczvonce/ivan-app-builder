@@ -869,9 +869,10 @@ function reviewGateAlerts(runs) {
     if (run.source !== "app-builder") continue;
     const gate = run.reviewGate;
     if (!gate || !gate.blocked) continue;
+    if (["host-review-queued", "host-review-running"].includes(gate.code)) continue;
     alerts.push({
       key: `review-gate:${run.project}`,
-      fingerprint: `${gate.code}:${shortHash(JSON.stringify(gate))}:${run.status}@${Math.floor(run.mtimeMs / 1000)}`,
+      fingerprint: `${gate.code}:${shortHash(gate.reason || "")}:${run.head || "no-head"}`,
       text: [
         `🔎 Phase 7 review gate BLOKOVANÝ — ${run.project}`,
         "",
